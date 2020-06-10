@@ -6,4 +6,4 @@ PWD := $(shell pwd)
 all:
 	make -C $(KERNEL_DIR) M=$(PWD) modules
 clean:
-	rm *.cmd *.symvers *.order *.log *.o ncp.mod ncp.mod.c
+	rm .*.cmd *.symvers *.order *.log *.o ncp.mod ncp.mod.c
