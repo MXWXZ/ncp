@@ -19,16 +19,18 @@ sudo sh -c "echo 2147483647 > /proc/sys/net/core/rmem_default"
 sudo sh -c "echo 2147483647 > /proc/sys/net/core/wmem_default"
 sudo sh -c "echo 2147483647 > /proc/sys/net/core/rmem_max"
 sudo sh -c "echo 2147483647 > /proc/sys/net/core/wmem_max"
-sudo insmod ncp.ko [from="<ip>"] [to="<ip>"]
+sudo insmod ncp.ko [from="<ip>"] [to="<ip>"] [buf=<bufsize>]
 ```
 - `from`: 可选，只截获指定源IP流量
 - `to`：可选，只截获指定目的IP流量
+- `buf`：默认 `100`，流量buffer，整数倍时用户态才接收一次。
 
 ```
-go run app.go [-f <logfile>] [-v]
+go run app.go [-f <logfile>] [-v] [-b <iobuf>]
 ```
 - `-f`: 指定log文件，默认 `ncp.log`
 - `-v`：同时打印log至stdout
+- `-b`：iobuffer，默认 `524288`（512K）
 
 目前只截获IPV4的TCP和UDP流量，回环流量只截获一次，其他类型流量可以修改 `check_protocol` 和 `ncp_get_port` 函数轻易扩展。
 
@@ -39,22 +41,20 @@ go run app.go [-f <logfile>] [-v]
 
 ## 性能测试
 使用parallel, tcpdump和sendip进行测试
+
 ```
 sudo tcpdump -c 1000000 -w 1.pcap -i lo src host 192.168.55.55
 printf '100000\n%.0s' {1..10} | sudo parallel -j0 sendip -l {} -d r8 -p ipv4 -is 192.168.55.55 -id 127.0.0.1 -p udp -us r5 -ud r5 127.0.0.1
 capinfos 1.pcap
 ```
-```
-Data byte rate:      5,649 kBps
-Data bit rate:       45 Mbps
-Average packet size: 50.00 bytes
-Average packet rate: 112 kpackets/s
-```
-开启ncp抓包后app top rate 33602 packets/s
-```
-Data byte rate:      3,639 kBps
-Data bit rate:       29 Mbps
-Average packet size: 50.00 bytes
-Average packet rate: 72 kpackets/s
-```
-性能损失35.6%, 读取速度为流量的46.7%
+
+文件写入缓存均为512K
+(本地模拟，sendip发收包各一次，流量速率和包速率只计算收包，抓包速率计算所有包，因此抓包速率可能大于包速率)
+
+|    组别     | 流量速率(kBps) | 性能损失 | 包速率(kpackets/s) | 抓包速率(kpackets/s) | 抓包速度比（抓包速率/2/包速率） |
+| :---------: | :------------: | :------: | :----------------: | :------------------: | :-----------------------------: |
+|   原始组    |      5649      |    0%    |        112         |          -           |                -                |
+|  无buffer   |      3639      |  35.6%   |         72         |         12.8         |              8.9%               |
+|  buffer=10  |      4386      |  22.4%   |         87         |         112          |              64.4%              |
+| buffer=100  |      5078      |  10.1%   |        100         |         204          |              102%               |
+| buffer=1000 |      5037      |  10.8%   |        100         |          99          |              49.5%              |

@@ -21,7 +21,7 @@ const magicNumber = "rainhurt"
 const magicNumberResp = "phpisbst"
 const magicNumberEnd = "seeunext"
 
-var donec = make(chan bool, 1)
+var donec = make(chan string, 1)
 var done = false
 var testCnt = 0
 var testTot = 0
@@ -75,18 +75,28 @@ func request(c *netlink.Conn, msg string, isret bool) string {
 	return string(ret.Data)
 }
 
-func recv(c *netlink.Conn) string {
+func recv(c *netlink.Conn) (string, int) {
+	var ret string
+	cnt := 0
+
 	tmp, err := c.Receive()
 	if err != nil && !done {
 		fmt.Printf("failed to receive request: %v\n", err)
-		return ""
+		return "", 0
 	}
-	if done {
-		return ""
+	if done && err != nil {
+		return "", 0
 	}
 	msg := tmp[0]
-	ret := *(**ncpMsg)(unsafe.Pointer(&msg.Data))
-	return fmt.Sprintf("%v %v %v %v %v", parseIP(ret.saddr), ret.sport, parseIP(ret.daddr), ret.dport, parseProto(ret.proto))
+	if len(msg.Data) == len(magicNumberEnd) && string(msg.Data) == magicNumberEnd {
+		return magicNumberEnd, 0
+	}
+	for i := 0; i < len(msg.Data); i += int(unsafe.Sizeof(ret)) {
+		res := (*ncpMsg)(unsafe.Pointer(&msg.Data[i]))
+		ret += fmt.Sprintf("%v %v %v %v %v\n", parseIP(res.saddr), res.sport, parseIP(res.daddr), res.dport, parseProto(res.proto))
+		cnt++
+	}
+	return ret, cnt
 }
 
 // setup connection(magic number check)
@@ -102,7 +112,9 @@ func signalHandler(c *netlink.Conn) {
 		done = true
 		c.SetReadDeadline(time.Unix(0, 1)) // go package bug, set ddl to unlock mux
 		request(c, magicNumberEnd, false)
-		donec <- true
+		c.SetReadDeadline(time.Now().Add(30 * time.Second))
+		msg, _ := recv(c)
+		donec <- msg
 	}()
 }
 
@@ -124,8 +136,10 @@ func testCount() {
 func main() {
 	var display bool
 	var filename string
+	var iobuf int
 	flag.StringVar(&filename, "f", "ncp.log", "file to save")
 	flag.BoolVar(&display, "v", false, "Display output")
+	flag.IntVar(&iobuf, "b", 524288, "io buffer")
 	flag.Parse()
 
 	fmt.Println("Capture started.")
@@ -150,21 +164,29 @@ func main() {
 		log.Fatalf("failed connect to kernel")
 	}
 
-	w := bufio.NewWriterSize(f, 524288) // 512K buffer
+	w := bufio.NewWriterSize(f, iobuf) // 512K buffer
 	defer w.Flush()
 
-	for msg := recv(c); !done && msg != magicNumberEnd; msg = recv(c) {
+	for msg, cnt := recv(c); !done && msg != magicNumberEnd; msg, cnt = recv(c) {
 		if display {
 			fmt.Println(msg)
 		}
-		if _, err = w.WriteString(msg + "\n"); err != nil {
+		if _, err = w.WriteString(msg); err != nil {
 			fmt.Printf("Error: %v\n", err)
 		}
-		testCnt++
-		testTot++
+		testCnt += cnt
+		testTot += cnt
 	}
 	if done {
-		<-donec
+		remain := <-donec
+		if remain != magicNumberEnd {
+			if display {
+				fmt.Println(remain)
+			}
+			if _, err = w.WriteString(remain); err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+		}
 	}
 	fmt.Println("Server shutdown")
 }
