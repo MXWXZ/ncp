@@ -1,0 +1,11 @@
+# github.com/buger/goterm v0.0.0-20200322175922-2f3e71b85129
+## explicit
+github.com/buger/goterm
+# github.com/mdlayher/netlink v1.1.0
+## explicit
+github.com/mdlayher/netlink
+github.com/mdlayher/netlink/nlenc
+# golang.org/x/net v0.0.0-20200202094626-16171245cfb2
+golang.org/x/net/bpf
+# golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5
+golang.org/x/sys/unix

@@ -1,0 +1,8 @@
+.vscode/
+*.cmd
+*.symvers
+*.order
+*.log
+*.o
+ncp.mod
+ncp.mod.c
