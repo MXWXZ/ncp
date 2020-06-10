@@ -38,19 +38,23 @@ go run app.go [-f <logfile>] [-v]
 - 用户进程连接后可随时断开（预期或非预期）和重连，预期断开会发送消息告知内核，捕获包后不会触发发送处理，非预期断开内核发送包但无法找到接收者，也不会发生错误。
 
 ## 性能测试
-使用tcpdump和sendip进行测试
+使用parallel, tcpdump和sendip进行测试
 ```
 sudo tcpdump -c 1000000 -w 1.pcap -i lo src host 192.168.55.55
-sudo sendip -l 1000000 -d r8 -p ipv4 -is 192.168.55.55 -id 127.0.0.1 -p udp -us r5 -ud r5 127.0.0.1
+printf '100000\n%.0s' {1..10} | sudo parallel -j0 sendip -l {} -d r8 -p ipv4 -is 192.168.55.55 -id 127.0.0.1 -p udp -us r5 -ud r5 127.0.0.1
 capinfos 1.pcap
 ```
 ```
-Data byte rate:      2,542 kBps
-Data bit rate:       20 Mbps
+Data byte rate:      5,649 kBps
+Data bit rate:       45 Mbps
+Average packet size: 50.00 bytes
+Average packet rate: 112 kpackets/s
 ```
-开启ncp抓包后app top rate 36543 pkts/s
+开启ncp抓包后app top rate 33602 packets/s
 ```
-Data byte rate:      1,192 kBps
-Data bit rate:       9,543 kbps
+Data byte rate:      3,639 kBps
+Data bit rate:       29 Mbps
+Average packet size: 50.00 bytes
+Average packet rate: 72 kpackets/s
 ```
-性能损失53.1%
+性能损失35.6%, 读取速度为流量的46.7%
