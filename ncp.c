@@ -128,6 +128,8 @@ static int ncp_init(void) {
 }
 
 static void ncp_exit(void) {
+    if (g_bufsize)
+        kfree(g_nl_buf);
     if (likely(g_nl_pid != -1)) {
         spin_lock(&g_nl_lock);
         if (nl_send_buf())

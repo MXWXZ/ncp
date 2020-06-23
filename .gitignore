@@ -6,3 +6,4 @@
 *.o
 ncp.mod
 ncp.mod.c
+*.ko
